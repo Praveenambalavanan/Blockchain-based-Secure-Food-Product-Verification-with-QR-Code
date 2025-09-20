@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Verification</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f1f1f1;
+      max-width: 600px;
+      margin: auto;
+    }
+    #details-container {
+      margin-top: 20px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+    .section {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .section h3 {
+      color: #333;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #218838;
+    }
+    input {
+      padding: 10px;
+      width: 100%;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .error {
+      color: red;
+      margin-top: 10px;
+      display: none;
+    }
+    .loading {
+      display: none;
+      margin-top: 10px;
+      color: #28a745;
+    }
+  </style>
+</head>
+<body>
+  <h2>Verify Product by ID</h2>
+  <input type="text" id="productId" placeholder="Enter Product ID" required>
+  <button onclick="verifyProduct()">Verify Product</button>
+  <div class="loading" id="loading">Loading...</div>
+  <div class="error" id="error"></div>
+  <div id="details-container">
+    <div id="farm-details" class="section"></div>
+    <div id="transport-details" class="section"></div>
+    <div id="retailer-details" class="section"></div>
+  </div>
+
+  <script>
+    // Initialize Gun.js correctly
+    const gun = Gun();
+
+    // Sanitize input to prevent injection
+    function sanitizeInput(input) {
+      return input.replace(/[^a-zA-Z0-9-_]/g, '');
+    }
+
+    // Format date as DD/MM/YYYY HH:MM:SS
+    function formatDate(timestamp) {
+      if (!timestamp) return 'N/A';
+      const date = new Date(timestamp);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const seconds = date.getSeconds().toString().padStart(2, '0');
+      return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Safely access object properties
+    function safeAccess(obj, key, defaultValue = 'N/A') {
+      return obj && obj[key] ? obj[key] : defaultValue;
+    }
+
+    async function getProductData(productId) {
+      try {
+        const sanitizedProductId = sanitizeInput(productId);
+        if (!sanitizedProductId) {
+          throw new Error('Invalid Product ID');
+        }
+
+        // Fetch data in parallel - fixed retailer fetch to match storage path
+        const [farmData, transportData, retailerData] = await Promise.all([
+          new Promise((resolve) => gun.get(`farm_${sanitizedProductId}`).once(resolve)),
+          new Promise((resolve) => gun.get(`transport_${sanitizedProductId}`).once(resolve)),
+          new Promise((resolve) => gun.get(`product_${sanitizedProductId}`).get('retailer').once(resolve))
+        ]);
+
+        if (!farmData) {
+          throw new Error('No farm data found for this Product ID');
+        }
+
+        return {
+          productId: sanitizedProductId,
+          farm: farmData || null,
+          transport: transportData || null,
+          retailer: retailerData || null
+        };
+      } catch (error) {
+        throw new Error(`Failed to fetch product data: ${error.message}`);
+      }
+    }
+
+    async function verifyProduct() {
+      const productIdInput = document.getElementById('productId').value.trim();
+      const errorDiv = document.getElementById('error');
+      const loadingDiv = document.getElementById('loading');
+      const detailsContainer = document.getElementById('details-container');
+
+      // Reset UI
+      errorDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+      detailsContainer.style.display = 'none';
+      document.getElementById('farm-details').innerHTML = '';
+      document.getElementById('transport-details').innerHTML = '';
+      document.getElementById('retailer-details').innerHTML = '';
+
+      try {
+        if (!productIdInput) {
+          throw new Error('Please enter a Product ID');
+        }
+
+        const productData = await getProductData(productIdInput);
+        if (!productData.farm) {
+          throw new Error('No product found with this ID.');
+        }
+
+        // Farm Details
+        document.getElementById('farm-details').innerHTML = `
+          <h3>Farm Details</h3>
+          <p><strong>Farmer:</strong> ${safeAccess(productData.farm, 'farmer')}</p>
+          <p><strong>Product:</strong> ${safeAccess(productData.farm, 'product')}</p>
+          <p><strong>Location:</strong> ${safeAccess(productData.farm, 'location')}</p>
+          <p><strong>Timestamp:</strong> ${formatDate(productData.farm?.timestamp)}</p>
+          <p><strong>Hash:</strong> ${safeAccess(productData.farm, 'hash')}</p>
+        `;
+
+        // Transport Details
+        document.getElementById('transport-details').innerHTML = productData.transport ? `
+          <h3>Transport Details</h3>
+          <p><strong>Transporter:</strong> ${safeAccess(productData.transport, 'transporter')}</p>
+          <p><strong>Vehicle:</strong> ${safeAccess(productData.transport, 'vehicle')}</p>
+          <p><strong>Temperature:</strong> ${safeAccess(productData.transport, 'temp')}</p>
+          <p><strong>Timestamp:</strong> ${formatDate(productData.transport?.timestamp)}</p>
+          <p><strong>Hash:</strong> ${safeAccess(productData.transport, 'hash')}</p>
+        ` : `<h3>Transport Details</h3><p>No transport data available.</p>`;
+
+        // Retailer Details - fixed keys to match actual data (retailerName, storeLocation, shelfLife)
+        document.getElementById('retailer-details').innerHTML = productData.retailer ? `
+          <h3>Retailer Details</h3>
+          <p><strong>Retailer:</strong> ${safeAccess(productData.retailer, 'retailerName')}</p>
+          <p><strong>Store:</strong> ${safeAccess(productData.retailer, 'storeLocation')}</p>
+          <p><strong>Shelf Life:</strong> ${safeAccess(productData.retailer, 'shelfLife')} days</p>
+          <p><strong>Timestamp:</strong> ${formatDate(productData.retailer?.timestamp)}</p>
+          <p><strong>Hash:</strong> ${safeAccess(productData.retailer, 'hash')}</p>
+        ` : `<h3>Retailer Details</h3><p>No retailer data available.</p>`;
+
+        detailsContainer.style.display = 'block';
+        localStorage.setItem('currentProductId', sanitizeInput(productIdInput));
+        console.log('Product verified:', productData);
+      } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+      } finally {
+        loadingDiv.style.display = 'none';
+      }
+    }
+
+    // Load stored productId on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      const productId = localStorage.getItem('currentProductId');
+      if (productId && sanitizeInput(productId) === productId) {
+        document.getElementById('productId').value = productId;
+      }
+    });
+  </script>
+</body>
+</html>

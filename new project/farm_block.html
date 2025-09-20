@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Farm Blockchain</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
+    .block {
+      background: #fff;
+      padding: 15px;
+      margin: 15px 0;
+      border-left: 6px solid #28a745;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .block h3 { margin: 0 0 10px; color: #28a745; }
+    .block p { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <h2>Farm Blockchain Records</h2>
+  <div id="blockchain"></div>
+
+  <script>
+    const gun = Gun();
+    const blockchainDiv = document.getElementById("blockchain");
+
+    gun.get("farmBlockchain").map().once((data, key) => {
+      if (!data || !data.hash || typeof data !== "object") return;
+
+      console.log("Fetched block:", data);
+
+      const block = document.createElement("div");
+      block.className = "block";
+
+      block.innerHTML = `
+        <h3>Farm Block</h3>
+        <p><strong>Farmer:</strong> ${data.farmer}</p>
+        <p><strong>Product:</strong> ${data.product}</p>
+        <p><strong>Location:</strong> ${data.location}</p>
+        <p><strong>Timestamp:</strong> ${data.timestamp}</p>
+        <p><strong>Prev Hash:</strong> ${data.prevHash}</p>
+        <p><strong>Hash:</strong> ${data.hash}</p>
+      `;
+
+      blockchainDiv.appendChild(block);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retailer Blockchain</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h2 {
+      color: #2c3e50;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .block {
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-left: 5px solid #6c757d;
+    }
+    .block-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .block-title {
+      font-weight: bold;
+      color: #6c757d;
+      font-size: 18px;
+    }
+    .block-timestamp {
+      color: #7f8c8d;
+      font-size: 14px;
+    }
+    .block-details {
+      margin-top: 15px;
+    }
+    .detail-row {
+      display: flex;
+      margin-bottom: 8px;
+    }
+    .detail-label {
+      font-weight: bold;
+      width: 150px;
+      color: #34495e;
+    }
+    .detail-value {
+      flex-grow: 1;
+    }
+    .hash {
+      font-family: monospace;
+      word-break: break-all;
+      font-size: 12px;
+      color: #7f8c8d;
+      background-color: #f9f9f9;
+      padding: 5px;
+      border-radius: 4px;
+    }
+    #loading {
+      text-align: center;
+      padding: 20px;
+      color: #7f8c8d;
+    }
+    #no-blocks {
+      text-align: center;
+      padding: 40px;
+      color: #7f8c8d;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>Retailer Blockchain</h2>
+  
+  <div id="loading">Loading retailer blocks...</div>
+  <div id="no-blocks">No retailer blocks found in the blockchain</div>
+  <div id="blockchain"></div>
+
+  <script>
+    const gun = Gun();
+    const blockchainDiv = document.getElementById('blockchain');
+    const loadingDiv = document.getElementById('loading');
+    const noBlocksDiv = document.getElementById('no-blocks');
+    const retailerChain = gun.get('retailerChain');
+    
+    let blocksLoaded = 0;
+    
+    retailerChain.map().once((data, key) => {
+      if (!data || !data.hash) return;
+      
+      loadingDiv.style.display = 'none';
+      blocksLoaded++;
+      
+      const blockElement = document.createElement('div');
+      blockElement.className = 'block';
+      
+      blockElement.innerHTML = `
+        <div class="block-header">
+          <div class="block-title">Retailer Block</div>
+          <div class="block-timestamp">${new Date(data.timestamp).toLocaleString()}</div>
+        </div>
+        <div class="block-details">
+          <div class="detail-row">
+            <div class="detail-label">Product ID:</div>
+            <div class="detail-value">${data.productId}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Retailer Name:</div>
+            <div class="detail-value">${data.retailerName}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Store Location:</div>
+            <div class="detail-value">${data.storeLocation}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Shelf Life:</div>
+            <div class="detail-value">${data.shelfLife || 'N/A'} days</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Previous Hash:</div>
+            <div class="detail-value"><span class="hash">${data.prevHash}</span></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Current Hash:</div>
+            <div class="detail-value"><span class="hash">${data.hash}</span></div>
+          </div>
+        </div>
+      `;
+      
+      blockchainDiv.appendChild(blockElement);
+    }).once(() => {
+      // This fires when all initial data is loaded
+      loadingDiv.style.display = 'none';
+      if (blocksLoaded === 0) {
+        noBlocksDiv.style.display = 'block';
+      }
+    });
+    
+    console.log('Listening for retailer blocks...');
+  </script>
+</body>
+</html>

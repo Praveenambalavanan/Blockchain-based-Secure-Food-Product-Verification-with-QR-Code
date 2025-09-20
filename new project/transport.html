@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Transport Registration</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white rounded-lg shadow-lg p-6">
+    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Transport Registration</h2>
+    <div class="space-y-4">
+      <div>
+        <label for="productId" class="block text-sm font-medium text-gray-700">Product ID</label>
+        <input 
+          type="text" 
+          id="productId" 
+          placeholder="Enter Product ID from Farm" 
+          class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required 
+        />
+      </div>
+      <div>
+        <label for="transporter" class="block text-sm font-medium text-gray-700">Transporter Name</label>
+        <input 
+          type="text" 
+          id="transporter" 
+          placeholder="Transporter Name" 
+          class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required 
+        />
+      </div>
+      <div>
+        <label for="vehicle" class="block text-sm font-medium text-gray-700">Vehicle Number</label>
+        <input 
+          type="text" 
+          id="vehicle" 
+          placeholder="Vehicle Number" 
+          class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required 
+        />
+      </div>
+      <div>
+        <label for="temp" class="block text-sm font-medium text-gray-700">Temperature Conditions</label>
+        <input 
+          type="text" 
+          id="temp" 
+          placeholder="Temperature Conditions (Optional)" 
+          class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <button 
+        onclick="registerTransport()" 
+        class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors duration-200"
+      >
+        Register Transport
+      </button>
+    </div>
+  </div>
+  <script>
+    const gun = Gun();
+    const transportChain = gun.get("transportChain");
+    function generateHash(data) {
+      return CryptoJS.SHA256(JSON.stringify(data)).toString();
+    }
+    function registerTransport() {
+      const productId = document.getElementById("productId").value;
+      const transporter = document.getElementById("transporter").value;
+      const vehicle = document.getElementById("vehicle").value;
+      const temp = document.getElementById("temp").value;
+      if (!productId || !transporter || !vehicle) {
+        alert("Please fill all required fields");
+        return;
+      }
+      const timestamp = new Date().toISOString();
+      const prevHash = localStorage.getItem("lastTransportHash") || "genesis";
+      const transportBlock = {
+        productId,
+        transporter,
+        vehicle,
+        temp,
+        timestamp,
+        prevHash,
+        type: "transport"
+      };
+      transportBlock.hash = generateHash(transportBlock);
+      transportChain.set(transportBlock);
+      gun.get(`transport_${productId}`).put(transportBlock);
+      localStorage.setItem("lastTransportHash", transportBlock.hash);
+      alert("Transport data registered for product: " + productId);
+      console.log("Saved transport block:", transportBlock);
+      document.getElementById("transporter").value = "";
+      document.getElementById("vehicle").value = "";
+      document.getElementById("temp").value = "";
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const productId = localStorage.getItem('currentProductId');
+      if (productId) {
+        document.getElementById('productId').value = productId;
+      }
+    });
+  </script>
+</body>
+</html>

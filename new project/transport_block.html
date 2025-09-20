@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Transport Blockchain</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
+    .block {
+      background: #fff;
+      padding: 15px;
+      margin: 15px 0;
+      border-left: 6px solid #007bff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .block h3 { margin: 0 0 10px; color: #007bff; }
+    .block p { margin: 5px 0; }
+    .hash { 
+      font-family: monospace;
+      word-break: break-all;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h2>Transport Blockchain Records</h2>
+  <div id="blockchain"></div>
+
+  <script>
+    const gun = Gun();
+    const blockchainDiv = document.getElementById("blockchain");
+    const transportChain = gun.get("transportChain");
+
+    // Load all transport blocks
+    transportChain.map().once((data, key) => {
+      if (!data || !data.hash || typeof data !== "object") return;
+
+      console.log("Fetched transport block:", data);
+
+      const block = document.createElement("div");
+      block.className = "block";
+
+      block.innerHTML = `
+        <h3>Transport Block</h3>
+        <p><strong>Product ID:</strong> ${data.productId}</p>
+        <p><strong>Transporter:</strong> ${data.transporter}</p>
+        <p><strong>Vehicle:</strong> ${data.vehicle}</p>
+        <p><strong>Temperature:</strong> ${data.temp || 'N/A'}</p>
+        <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</p>
+        <p><strong>Previous Hash:</strong> <span class="hash">${data.prevHash}</span></p>
+        <p><strong>Current Hash:</strong> <span class="hash">${data.hash}</span></p>
+      `;
+
+      blockchainDiv.appendChild(block);
+    });
+  </script>
+</body>
+</html>

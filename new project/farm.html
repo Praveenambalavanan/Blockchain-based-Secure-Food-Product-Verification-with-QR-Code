@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Farm Registration</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f7f9fc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .container {
+      background: linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)), 
+                  url('https://images.unsplash.com/photo-1500595046743-dd26eb752fce?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80') center/cover no-repeat;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      position: relative;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      background-color: rgba(255, 255, 255, 0.95);
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #productIdDisplay {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #e6f7ff;
+      border-left: 4px solid #1890ff;
+      border-radius: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 20px;
+      }
+      input[type="text"] {
+        font-size: 14px;
+      }
+      button {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Farm Registration</h2>
+
+    <input type="text" id="product" value="Egg" readonly required />
+    <input type="text" id="farmer" placeholder="Farmer Name" required />
+    <input type="text" id="location" placeholder="Farm Location" required />
+    
+    <button onclick="registerFarm()">Register Farm Block</button>
+    <div id="productIdDisplay"></div>
+  </div>
+
+  <script>
+    const gun = Gun();
+
+    function generateHash(data) {
+      return CryptoJS.SHA256(JSON.stringify(data)).toString();
+    }
+
+    function generateProductId() {
+      return 'prod-' + Math.random().toString(36).substr(2, 9);
+    }
+
+    function registerFarm() {
+      const farmer = document.getElementById("farmer").value;
+      const product = document.getElementById("product").value;
+      const location = document.getElementById("location").value;
+
+      if (!farmer || !product || !location) {
+        alert("Please fill all fields");
+        return;
+      }
+
+      const productId = generateProductId();
+      const timestamp = new Date().toISOString();
+      const prevHash = localStorage.getItem("lastFarmHash") || "0000";
+
+      const blockData = {
+        productId,
+        farmer,
+        product,
+        location,
+        timestamp,
+        prevHash
+      };
+
+      const hash = generateHash(blockData);
+      blockData.hash = hash;
+
+      localStorage.setItem("lastFarmHash", hash);
+      localStorage.setItem('currentProductId', productId);
+
+      gun.get("farmBlockchain").set(blockData);
+      gun.get(`farm_${productId}`).put(blockData);
+
+      document.getElementById("productIdDisplay").innerHTML = 
+        `✅ Product ID: <strong>${productId}</strong> — Save this ID for transport/retailer stages!`;
+
+      alert(`Farm block registered! Product ID: ${productId}`);
+
+      // Clear form fields
+      document.getElementById("farmer").value = "";
+      document.getElementById("product").value = "";
+      document.getElementById("location").value = "";
+    }
+  </script>
+</body>
+</html>

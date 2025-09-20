@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retailer Registration</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h2 {
+      color: #2c3e50;
+      text-align: center;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #6c757d;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #5a6268;
+    }
+    #message {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    #qr-container {
+      margin-top: 20px;
+      text-align: center;
+      display: none;
+    }
+    #product-summary {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #download-btn {
+      margin-top: 10px;
+      background-color: #28a745;
+    }
+    #download-btn:hover {
+      background-color: #218838;
+    }
+  </style>
+</head>
+<body>
+  <h2>Retailer Registration</h2>
+  
+  <div class="form-group">
+    <label for="productId">Product ID:</label>
+    <input type="text" id="productId" placeholder="Enter product ID from farm" required>
+  </div>
+  
+  <div class="form-group">
+    <label for="retailerName">Retailer Name:</label>
+    <input type="text" id="retailerName" placeholder="Enter retailer name" required>
+  </div>
+  
+  <div class="form-group">
+    <label for="storeLocation">Store Location:</label>
+    <input type="text" id="storeLocation" placeholder="Enter store location" required>
+  </div>
+  
+  <div class="form-group">
+    <label for="shelfLife">Shelf Life (days):</label>
+    <input type="number" id="shelfLife" placeholder="Enter shelf life in days">
+  </div>
+  
+  <button onclick="registerRetailer()">Register Retailer & Generate QR</button>
+  
+  <div id="message"></div>
+  
+  <div id="qr-container">
+    <h3>Product QR Code</h3>
+    <canvas id="qr-code"></canvas>
+    <button id="download-btn" onclick="downloadQR()">Download QR Code</button>
+  </div>
+  
+  <div id="product-summary"></div>
+
+  <script>
+    const gun = Gun();
+    const retailerChain = gun.get('retailerChain');
+    
+    function generateHash(data) {
+      return CryptoJS.SHA256(JSON.stringify(data)).toString();
+    }
+    
+    function showMessage(text, isSuccess) {
+      const messageDiv = document.getElementById('message');
+      messageDiv.textContent = text;
+      messageDiv.className = isSuccess ? 'success' : 'error';
+      messageDiv.style.display = 'block';
+      
+      setTimeout(() => {
+        messageDiv.style.display = 'none';
+      }, 5000);
+    }
+    
+    function formatDate(date) {
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+    
+    async function getProductJourney(productId) {
+      return new Promise((resolve) => {
+        let productData = { productId };
+        
+        // Get farm data
+        gun.get(`farm_${productId}`).once((data) => {
+          if (data) productData.farm = data;
+          
+          // Get transport data
+          gun.get(`transport_${productId}`).once((transportData) => {
+            if (transportData) productData.transport = transportData;
+            resolve(productData);
+          });
+        });
+      });
+    }
+    
+    function downloadQR() {
+      const qrCanvas = document.getElementById('qr-code');
+      const productId = document.getElementById('productId').value.trim() || 'product';
+      const link = document.createElement('a');
+      link.download = `${productId}-qr-code.png`;
+      link.href = qrCanvas.toDataURL('image/png');
+      link.click();
+    }
+    
+    async function registerRetailer() {
+      const productId = document.getElementById('productId').value.trim();
+      const retailerName = document.getElementById('retailerName').value.trim();
+      const storeLocation = document.getElementById('storeLocation').value.trim();
+      const shelfLife = document.getElementById('shelfLife').value;
+      
+      if (!productId || !retailerName || !storeLocation) {
+        showMessage('Please fill in all required fields', false);
+        return;
+      }
+      
+      // Get product journey first
+      const productJourney = await getProductJourney(productId);
+      
+      if (!productJourney.farm) {
+        showMessage('No farm data found for this product ID', false);
+        return;
+      }
+      
+      const timestamp = new Date().toISOString();
+      const prevHash = localStorage.getItem('lastRetailerHash') || 'genesis';
+      
+      const retailerData = {
+        productId,
+        retailerName,
+        storeLocation,
+        shelfLife: shelfLife || null,
+        timestamp,
+        prevHash,
+        type: 'retailer'
+      };
+      
+      // Generate hash
+      retailerData.hash = generateHash(retailerData);
+      
+      // Store in blockchain
+      retailerChain.set(retailerData);
+      
+      // Also store linked to product for easy lookup
+      gun.get(`product_${productId}`).get('retailer').put(retailerData);
+      
+      // Update last hash
+      localStorage.setItem('lastRetailerHash', retailerData.hash);
+      
+      // Prepare mobile-friendly text data for QR code
+      const mobileText = `
+        PRODUCT VERIFICATION
+        --------------------
+        Product ID: ${productId}
+        Product Name: ${productJourney.farm.product}
+        
+        FARM DETAILS:
+        • Farmer: ${productJourney.farm.farmer}
+        • Location: ${productJourney.farm.location}
+        • Date: ${formatDate(new Date(productJourney.farm.timestamp))}
+        
+        ${productJourney.transport ? `
+        TRANSPORT DETAILS:
+        • Transporter: ${productJourney.transport.transporter}
+        • Vehicle: ${productJourney.transport.vehicle}
+        • Date: ${formatDate(new Date(productJourney.transport.timestamp))}
+        ` : ''}
+        
+        RETAILER DETAILS:
+        • Retailer: ${retailerName}
+        • Store: ${storeLocation}
+        • Shelf Life: ${shelfLife || 'N/A'} days
+        • Date Received: ${formatDate(new Date(timestamp))}
+        
+        Blockchain Verified
+      `;
+      
+      // Generate QR code with simple text
+      QRCode.toCanvas(
+        document.getElementById('qr-code'),
+        mobileText,
+        { 
+          width: 300,  // Larger size for better scanning
+          margin: 4,
+          color: {
+            dark: '#000000',  // Pure black
+            light: '#FFFFFF'  // Pure white
+          }
+        }, 
+        (error) => {
+          if (error) {
+            console.error('QR generation failed:', error);
+            showMessage('Failed to generate QR code', false);
+            return;
+          }
+          document.getElementById('qr-container').style.display = 'block';
+        }
+      );
+      
+      // Show product summary
+      displayProductSummary(productJourney, retailerData);
+      
+      // Show success message
+      showMessage('Retailer successfully registered! QR code generated.', true);
+    }
+    
+    function displayProductSummary(productJourney, retailerData) {
+      const summaryDiv = document.getElementById('product-summary');
+      
+      let html = `
+        <h3>Product Journey Summary</h3>
+        <h4>Farm Details</h4>
+        <p><strong>Product:</strong> ${productJourney.farm.product}</p>
+        <p><strong>Farmer:</strong> ${productJourney.farm.farmer}</p>
+        <p><strong>Location:</strong> ${productJourney.farm.location}</p>
+        <p><strong>Date:</strong> ${formatDate(new Date(productJourney.farm.timestamp))}</p>
+      `;
+      
+      if (productJourney.transport) {
+        html += `
+          <h4>Transport Details</h4>
+          <p><strong>Transporter:</strong> ${productJourney.transport.transporter}</p>
+          <p><strong>Vehicle:</strong> ${productJourney.transport.vehicle}</p>
+          <p><strong>Date:</strong> ${formatDate(new Date(productJourney.transport.timestamp))}</p>
+        `;
+      }
+      
+      html += `
+        <h4>Retailer Details</h4>
+        <p><strong>Retailer:</strong> ${retailerData.retailerName}</p>
+        <p><strong>Store:</strong> ${retailerData.storeLocation}</p>
+        <p><strong>Shelf Life:</strong> ${retailerData.shelfLife || 'N/A'} days</p>
+        <p><strong>Date Received:</strong> ${formatDate(new Date(retailerData.timestamp))}</p>
+      `;
+      
+      summaryDiv.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
